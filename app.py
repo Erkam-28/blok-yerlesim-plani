@@ -1,22 +1,24 @@
 import streamlit as st
 import pandas as pd
-from datetime import datetime
+import numpy as np
+import matplotlib.pyplot as plt
 
-st.title("SAHA TANIMI TESTİ")
+st.title("BLOK YERLEŞİM PLANI")
 
-# SAHALAR tanımını buraya kopyala (kısa versiyon)
-SAHALAR = [
-    {"ad": "A3 Atölyesi", "oncelik": 1,
-     "kisit": lambda b, t: True,  # Geçici
-     "alan": lambda t: (74.0, 32.0)},
-    {"ad": "A29 Açık Saha", "oncelik": 2,
-     "kisit": lambda b, t: True,
-     "alan": lambda t: (120.0, 21.0)},
-]
+uploaded = st.file_uploader("Excel yükle", type=["xlsx"])
 
-for saha in SAHALAR:
-    try:
-        u, g = saha["alan"](datetime.now())
-        st.success(f"✅ {saha['ad']}: {u} x {g}")
-    except Exception as e:
-        st.error(f"❌ {saha['ad']} HATALI: {e}")
+if uploaded:
+    df = pd.read_excel(uploaded, sheet_name="Blok(MUGEM)")
+    
+    # Sütun adlarını düzenle
+    df.columns = ["Blok", "Baslangic", "Bitis", "Erection_Bas", "En", "Boy", "Alan", "Tonaj",
+                  "Atanacak_Saha", "Kordinat_X", "Kordinat_Y", "Erection_X", "Erection_Y"]
+    
+    st.success(f"{len(df)} blok yüklendi")
+    st.dataframe(df)
+    
+    # Basit bir grafik
+    fig, ax = plt.subplots()
+    ax.bar(df["Blok"].head(10), df["Tonaj"].head(10))
+    ax.set_xticklabels(df["Blok"].head(10), rotation=45)
+    st.pyplot(fig)
