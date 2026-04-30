@@ -2,8 +2,9 @@ import streamlit as st
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
+from datetime import datetime
 
-st.title("BLOK YERLEŞİM PLANI")
+st.title("BLOK YERLEŞİM PLANI - TEST")
 
 uploaded = st.file_uploader("Excel yükle", type=["xlsx"])
 
@@ -14,11 +15,34 @@ if uploaded:
     df.columns = ["Blok", "Baslangic", "Bitis", "Erection_Bas", "En", "Boy", "Alan", "Tonaj",
                   "Atanacak_Saha", "Kordinat_X", "Kordinat_Y", "Erection_X", "Erection_Y"]
     
-    st.success(f"{len(df)} blok yüklendi")
-    st.dataframe(df)
+    # Tarihleri dönüştür
+    for c in ["Baslangic", "Bitis", "Erection_Bas"]:
+        df[c] = pd.to_datetime(df[c], dayfirst=True, errors="coerce")
     
-    # Basit bir grafik
-    fig, ax = plt.subplots()
-    ax.bar(df["Blok"].head(10), df["Tonaj"].head(10))
-    ax.set_xticklabels(df["Blok"].head(10), rotation=45)
-    st.pyplot(fig)
+    st.success(f"{len(df)} blok yüklendi")
+    
+    # ========== SAHA TANIMINI EKLE ==========
+    SAHALAR_TEST = [
+        {"ad": "A3 Atölyesi", "alan": lambda t: (74.0, 32.0)},
+        {"ad": "A29 Açık Saha", "alan": lambda t: (120.0, 21.0)},
+    ]
+    
+    # SAHA TANIMINI TEST ET
+    st.subheader("Saha Tanım Testi")
+    for saha in SAHALAR_TEST:
+        try:
+            u, g = saha["alan"](datetime.now())
+            st.write(f"✅ {saha['ad']}: {u} x {g}")
+        except Exception as e:
+            st.error(f"❌ {saha['ad']}: {e}")
+    
+    # ========== BASİT YERLEŞİM HESAPLA ==========
+    st.subheader("Yerleşim Testi")
+    
+    try:
+        tarih = pd.Timestamp.now()
+        aktif = df[(df["Baslangic"] <= tarih) & (df["Erection_Bas"] > tarih)]
+        st.write(f"Aktif blok sayısı: {len(aktif)}")
+        st.dataframe(aktif[["Blok", "Baslangic", "Bitis", "Erection_Bas"]])
+    except Exception as e:
+        st.error(f"Yerleşim hatası: {e}")
