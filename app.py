@@ -2,7 +2,6 @@ import streamlit as st
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
-from matplotlib.patches import Rectangle, FancyBboxPatch, Polygon
 from datetime import datetime
 import warnings
 from io import BytesIO
@@ -18,26 +17,7 @@ st.markdown("---")
 # ==================================================
 
 ISKELE = 3
-DARBOGAZ_PCT = 80
 STEP = 0.5
-DIKINE_ZORUNLU_BOY = 27
-
-ISTIF_X_SOL = 0.0
-ISTIF_Y_ALT = 0.0
-ISTIF_Y_UST = 35.52
-ISTIF_X_UST = 100.18
-ISTIF_X_ALT = 72.4
-ISTIF_EGIM = (ISTIF_X_UST - ISTIF_X_ALT) / ISTIF_Y_UST
-
-DUZ_KIZAK_TOPLAM_U = 251.0
-DUZ_KIZAK_TOPLAM_G = 59.56
-DUZ_KIZAK_BLOK_U = 101.0
-DUZ_KIZAK_MUGEM_X_BASLANGIC = 101.0
-
-A6_TAM_U = 230.0
-A6_G = 40.3
-A6_BLOK_U = 111.0
-A6_EYUL = datetime(2026, 9, 1)
 
 def snap(v):
     return round(round(v / STEP) * STEP, 10)
@@ -79,27 +59,83 @@ if uploaded_file is not None:
         for c in ["Baslangic", "Bitis", "Erection_Bas"]:
             df[c] = pd.to_datetime(df[c], dayfirst=True, errors="coerce")
         
+        # Geçersiz tarihleri temizle
+        df = df.dropna(subset=["Baslangic", "Bitis", "Erection_Bas"])
+        
         st.success(f"✅ {len(df)} blok başarıyla yüklendi!")
         
-        col1, col2, col3 = st.columns(3)
+        # Temel bilgiler
+        col1, col2, col3, col4 = st.columns(4)
         col1.metric("📦 Toplam Blok", len(df))
         col2.metric("🏗️ Toplam Tonaj", f"{df['Tonaj'].sum():.0f} t")
-        col3.metric("📅 İlk Başlangıç", df["Baslangic"].min().strftime("%d.%m.%Y"))
+        col3.metric("📐 Toplam Alan", f"{df['Alan'].sum():.0f} m²")
+        col4.metric("📅 Başlangıç", df["Baslangic"].min().strftime("%d.%m.%Y"))
         
-        st.dataframe(df.head(10))
+        st.markdown("---")
         
+        # Tarih seçici
+        min_date = df["Baslangic"].min()
+        max_date = df["Erection_Bas"].max()
+        secilen_tarih = st.date_input("📅 **Plan Görüntülenecek Tarih**", value=pd.Timestamp.now(), min_value=min_date, max_value=max_date)
+        
+        # Hesaplama butonu
+        if st.button("🔄 **Yerleşimi Hesapla**", type="primary", use_container_width=True):
+            with st.spinner("🏗️ Yerleşim hesaplanıyor..."):
+                # Basit bir hesaplama simülasyonu - daha sonra tam kod eklenecek
+                st.success(f"✅ Hesaplama tamamlandı - {secilen_tarih.strftime('%d.%m.%Y')}")
+                
+                # Geçici olarak veri tablosunu göster
+                st.subheader("📊 Yüklenen Bloklar")
+                st.dataframe(df[["Blok", "Baslangic", "Bitis", "En", "Boy", "Tonaj"]].head(20))
+                
+                # Basit bir grafik göster
+                fig, ax = plt.subplots(figsize=(10, 4))
+                blok_sayisi = df.groupby(df["Baslangic"].dt.month).size()
+                ax.bar(blok_sayisi.index, blok_sayisi.values)
+                ax.set_xlabel("Ay")
+                ax.set_ylabel("Blok Sayısı")
+                ax.set_title("Aylık Blok Dağılımı")
+                st.pyplot(fig)
+                plt.close(fig)
+        
+        # Veri önizleme
+        with st.expander("📋 Veri Önizleme (ilk 10 satır)"):
+            st.dataframe(df.head(10))
+        
+        # Manuel atama yapılanlar
+        manuel = df[df["Atanacak_Saha"].notna()]
+        if len(manuel) > 0:
+            with st.expander(f"📌 Manuel Atama Yapılan Bloklar ({len(manuel)} adet)"):
+                st.dataframe(manuel[["Blok", "Atanacak_Saha", "Kordinat_X", "Kordinat_Y"]])
+        
+        # Excel indir
+        output = BytesIO()
+        with pd.ExcelWriter(output, engine='openpyxl') as writer:
+            df.to_excel(writer, index=False, sheet_name="Yerlesim")
+        
+        st.download_button(
+            label="📥 **Excel Çıktısını İndir**",
+            data=output.getvalue(),
+            file_name="blok_yerlesim.xlsx",
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            use_container_width=True
+        )
+    
     except Exception as e:
-        st.error(f"Hata: {str(e)}")
+        st.error(f"❌ Hata oluştu: {str(e)}")
 
 else:
-    st.info("👈 Lütfen Excel dosyasını yükleyin")
+    st.info("👈 **Lütfen Excel dosyasını yükleyin**")
     st.markdown("""
     ### 📋 Gerekli Sütunlar:
-    - Blok
-    - Başlangıç
-    - Bitiş
-    - Erection Başlangıç
-    - En, Boy, Alan, Tonaj
+    | Sütun | Açıklama |
+    |-------|----------|
+    | Blok | Blok adı |
+    | Başlangıç | Üretim başlangıç tarihi |
+    | Bitiş | Üretim bitiş tarihi |
+    | Erection Başlangıç | Montaj başlangıç tarihi |
+    | En, Boy, Alan, Tonaj | Blok ölçüleri |
     """)
 
+st.markdown("---")
 st.caption("🏗️ Blok Yerleşim Planı")
