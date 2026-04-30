@@ -9,16 +9,12 @@ from io import BytesIO
 
 warnings.filterwarnings("ignore")
 
-# ==================================================
-# SAYFA AYARLARI
-# ==================================================
 st.set_page_config(page_title="Blok Yerleşim Planı", layout="wide")
-
 st.title("🏗️ BLOK YERLEŞİM PLANI")
 st.markdown("---")
 
 # ==================================================
-# SABİTLER (KODUN ORİJİNAL HALİYLE AYNI)
+# SABİTLER
 # ==================================================
 
 ISKELE = 3
@@ -83,10 +79,6 @@ SAHALAR = [
 ]
 SAHALAR = sorted(SAHALAR, key=lambda x: x["oncelik"])
 
-# ==================================================
-# YARDIMCI FONKSİYONLAR
-# ==================================================
-
 def snap(v):
     return round(round(v / STEP) * STEP, 10)
 
@@ -107,11 +99,11 @@ def blok_rotasyon_modu(blok):
 def istif_icinde_mi(x, y, w, h):
     koseler = [(x, y), (x+w, y), (x, y+h), (x+w, y+h)]
     for cx, cy in koseler:
-        if cx < 0: return False
-        if cy < 0: return False
-        if cy > ISTIF_Y_UST: return False
+        if cx < 0 or cy < 0 or cy > ISTIF_Y_UST:
+            return False
         x_max = ISTIF_X_ALT + ISTIF_EGIM * cy
-        if cx > x_max + 0.001: return False
+        if cx > x_max + 0.001:
+            return False
     return True
 
 def mugem_icinde_mi(x, y, w, h):
@@ -123,7 +115,7 @@ def mugem_icinde_mi(x, y, w, h):
 
 def mugem_boyut(row):
     return float(row["Boy"]), float(row["En"])
-
+    
 # ==================================================
 # SAHA MANAGER SINIFI
 # ==================================================
@@ -154,6 +146,7 @@ class SahaManager:
     def can_place(self, x, y, w, h, saha_u, saha_g, tarih, blok_erc=None):
         x, y, w, h = snap(x), snap(y), snap(w), snap(h)
         tarih_ts = pd.Timestamp(tarih)
+        
         if x < 0 or y < 0:
             return False
         if self.ad == "Açık Saha(İstif)":
@@ -162,18 +155,25 @@ class SahaManager:
         else:
             if x + w > saha_u + 0.01 or y + h > saha_g + 0.01:
                 return False
+        
         tr = self.transfer_rect()
         if tr is not None:
             if rect_overlaps(x, y, x+w, y+h, tr[0], tr[1], tr[2], tr[3]):
                 return False
+        
         if blok_erc is not None:
             blok_erc_ts = pd.Timestamp(blok_erc)
-            kontrol_bloklari = [b for b in self.bloklar if pd.Timestamp(b["bas"]) < blok_erc_ts and pd.Timestamp(b["erc"]) > tarih_ts]
+            kontrol_bloklari = [b for b in self.bloklar 
+                               if pd.Timestamp(b["bas"]) < blok_erc_ts 
+                               and pd.Timestamp(b["erc"]) > tarih_ts]
         else:
-            kontrol_bloklari = [b for b in self.bloklar if pd.Timestamp(b["bas"]) <= tarih_ts < pd.Timestamp(b["erc"])]
+            kontrol_bloklari = [b for b in self.bloklar 
+                               if pd.Timestamp(b["bas"]) <= tarih_ts < pd.Timestamp(b["erc"])]
+        
         for b in kontrol_bloklari:
             if rect_overlaps(x, y, x+w, y+h, b["x"], b["y"], b["x"]+b["w"], b["y"]+b["h"]):
                 return False
+        
         if self.ad == "Düz Kızak":
             for b in self.mugem_isgal:
                 b_bas_ts = pd.Timestamp(b["bas"])
@@ -223,10 +223,13 @@ class SahaManager:
     def find_spot_single(self, w, h, saha_u, saha_g, tarih, blok_erc=None):
         w, h = snap(w), snap(h)
         saha_u, saha_g = snap(saha_u), snap(saha_g)
+        
         if w > saha_u or h > saha_g:
             return None
+        
         aday_ys = self._aday_ys(tarih)
         aday_xs = self._aday_xs(tarih)
+        
         for y in aday_ys:
             y = snap(y)
             if y < 0 or y + h > saha_g + 0.01:
@@ -253,10 +256,12 @@ class SahaManager:
                 if pos:
                     return pos[0], pos[1], True
             return None
+        
         pos_n = self.find_spot_single(w, h, saha_u, saha_g, tarih, blok_erc)
         pos_r = None
         if abs(w - h) > 0.01:
             pos_r = self.find_spot_single(h, w, saha_u, saha_g, tarih, blok_erc)
+        
         if pos_n is None and pos_r is None:
             return None
         if pos_n is None:
@@ -339,8 +344,6 @@ class MugemManager:
 
     def remove_block(self, idx):
         self.bloklar = [b for b in self.bloklar if b["idx"] != idx]
-
-
 # ==================================================
 # YERLEŞTİRME FONKSİYONLARI
 # ==================================================
@@ -559,23 +562,25 @@ def guncelle_tarih_ve_manager(idx, tarih_ts, target_df, managers):
     target_df.at[idx, "Erection_Bas"] = yeni_erc
     target_df.at[idx, "Sigmiyor"] = False
     target_df.at[idx, "Otelendi"] = True
-
-
 # ==================================================
-# YERLEŞİM HESAPLA
+# YERLEŞİM HESAPLA VE YARDIMCILAR
 # ==================================================
 
 def yerlesim_hesapla(hedef_tarih, target_df):
     managers = reset_df(target_df)
     hedef_ts = pd.Timestamp(hedef_tarih)
     bekleyen = {}
+    
     tum_tarihler = sorted(set(
         list(target_df.loc[target_df["Baslangic"] <= hedef_ts, "Baslangic"].dropna().unique()) +
         list(target_df.loc[(target_df["Bitis"] <= hedef_ts) & (target_df["Erection_Bas"] > target_df["Bitis"]), "Bitis"].dropna().unique()) +
         list(target_df.loc[target_df["Erection_Bas"] <= hedef_ts, "Erection_Bas"].dropna().unique())
     ))
+    
     for tarih in tum_tarihler:
         tarih_ts = pd.Timestamp(tarih)
+        
+        # MUGEM'e erection ile gelenler
         erection_gelenler = target_df.index[
             (target_df["Erection_Bas"] == tarih_ts) &
             (target_df["Mugem_Yerlesti"] == False) &
@@ -584,6 +589,8 @@ def yerlesim_hesapla(hedef_tarih, target_df):
         ]
         for idx in erection_gelenler:
             mugem_erection_yerlestir(idx, target_df, managers)
+        
+        # Bugün biten blokları istife taşı (darboğaz varsa)
         bugun_biten = target_df.index[
             (target_df["Bitis"] == tarih_ts) &
             (target_df["Erection_Bas"] > tarih_ts) &
@@ -609,6 +616,8 @@ def yerlesim_hesapla(hedef_tarih, target_df):
             ].iterrows())
             if u * g > 0 and (kullanilan / (u * g) * 100) >= DARBOGAZ_PCT:
                 istif_alanina_tasi(idx, target_df, managers)
+        
+        # Bekleyen blokları dene
         for idx in list(bekleyen.keys()):
             if not target_df.at[idx, "Sigmiyor"]:
                 del bekleyen[idx]
@@ -619,6 +628,8 @@ def yerlesim_hesapla(hedef_tarih, target_df):
             if yerlesme:
                 guncelle_tarih_ve_manager(idx, tarih_ts, target_df, managers)
                 del bekleyen[idx]
+        
+        # Yeni başlayan blokları yerleştir
         for idx in target_df.index[target_df["Baslangic"] == tarih]:
             blok = target_df.loc[idx]
             if pd.notna(blok["Atanan_Saha"]) and pd.notna(blok["Koord_X"]) and pd.notna(blok["Koord_Y"]):
@@ -631,6 +642,7 @@ def yerlesim_hesapla(hedef_tarih, target_df):
             if not yerlesme:
                 bekleyen[idx] = tarih_ts
                 target_df.at[idx, "Sigmiyor"] = True
+    
     return managers
 
 
@@ -702,8 +714,6 @@ def aktif_blok_say(target_df, t):
         (target_df["Erection_Bas"] <= t)
     ]
     return len(normal) + len(istif) + len(mugem)
-
-
 # ==================================================
 # ÇİZİM FONKSİYONLARI
 # ==================================================
@@ -742,8 +752,10 @@ def saha_ciz_a3_birlesik(ax, target_df, tarih_ts):
     jig_u, jig_g = 52.0, 32.0
     toplam_u = a3_u + jig_u
     toplam_g = max(a3_g, jig_g)
+    
     ax.add_patch(FancyBboxPatch((0, 0), toplam_u, toplam_g, boxstyle="round,pad=0.3", linewidth=2, linestyle="--", edgecolor="#2c3e50", facecolor="#ecf0f1", alpha=0.25))
     ax.plot([a3_u, a3_u], [0, toplam_g], color="#2c3e50", linewidth=1.5, linestyle="--")
+    
     tr = TRANSFER_RULES.get("A3 Atölyesi")
     if tr:
         tw, th = tr["size"]
@@ -751,6 +763,7 @@ def saha_ciz_a3_birlesik(ax, target_df, tarih_ts):
             tw, th = th, tw
         ax.add_patch(Rectangle((0, 0), tw, th, linewidth=1.5, edgecolor="#8e44ad", facecolor="none", linestyle="--"))
         ax.text(tw/2, th/2, f"TRANSFER\n{tw:.0f}x{th:.0f}m", ha="center", va="center", fontsize=5, color="#5b2c6f", fontweight="bold")
+    
     a3_aktif = target_df[
         (target_df["Atanan_Saha"] == "A3 Atölyesi") &
         (target_df["Baslangic"] <= tarih_ts) &
@@ -758,6 +771,7 @@ def saha_ciz_a3_birlesik(ax, target_df, tarih_ts):
         (target_df["Koord_X"].notna()) &
         (target_df["Istife_Tasindi"] == False)
     ].copy()
+    
     jig_aktif = target_df[
         (target_df["Atanan_Saha"] == "A3 Atölyesi(Jig)") &
         (target_df["Baslangic"] <= tarih_ts) &
@@ -765,31 +779,48 @@ def saha_ciz_a3_birlesik(ax, target_df, tarih_ts):
         (target_df["Koord_X"].notna()) &
         (target_df["Istife_Tasindi"] == False)
     ].copy()
+    
     for _, b in a3_aktif.iterrows():
         _blok_ciz_tek(ax, b, tarih_ts, 0.0)
     for _, b in jig_aktif.iterrows():
         _blok_ciz_tek(ax, b, tarih_ts, a3_u)
+    
     ax.text(a3_u/2, toplam_g+2.5, "A3 Atölyesi", fontsize=9, fontweight="bold", color="#1b2631", ha="center")
     ax.text(a3_u + jig_u/2, toplam_g+2.5, "A3 Atölyesi(Jig)", fontsize=9, fontweight="bold", color="#1b2631", ha="center")
+    
     a3_saha = next(s for s in SAHALAR if s["ad"] == "A3 Atölyesi")
     jig_saha = next(s for s in SAHALAR if s["ad"] == "A3 Atölyesi(Jig)")
+    
     a3_kul = saha_kullanim_alani(a3_saha, target_df, tarih_ts)[1]
     jig_kul = saha_kullanim_alani(jig_saha, target_df, tarih_ts)[1]
+    
     a3_kap, jig_kap = a3_u * a3_g, jig_u * jig_g
     a3_pct = min(a3_kul / a3_kap * 100, 100) if a3_kap > 0 else 0
     jig_pct = min(jig_kul / jig_kap * 100, 100) if jig_kap > 0 else 0
-    def _renk(pct): return "#e74c3c" if pct >= DARBOGAZ_PCT else "#f39c12" if pct >= 60 else "#27ae60"
+    
+    def _renk(pct):
+        return "#e74c3c" if pct >= DARBOGAZ_PCT else "#f39c12" if pct >= 60 else "#27ae60"
+    
     ax.text(a3_u/2, -3.5, f"%{a3_pct:.0f} ({len(a3_aktif)} blok)", fontsize=7, fontweight="bold", color=_renk(a3_pct), ha="center")
     ax.text(a3_u + jig_u/2, -3.5, f"%{jig_pct:.0f} ({len(jig_aktif)} blok)", fontsize=7, fontweight="bold", color=_renk(jig_pct), ha="center")
+    
     ax.set_xlim(-2, toplam_u+3)
     ax.set_ylim(-6, toplam_g+6)
     ax.set_aspect("equal")
     ax.axis("off")
-
+# ==================================================
+# İSTİF ALANI ÇİZİMİ
+# ==================================================
 
 def saha_ciz_istif(ax, saha, target_df, tarih_ts):
-    trapezoid = np.array([[ISTIF_X_SOL, ISTIF_Y_ALT], [ISTIF_X_ALT, ISTIF_Y_ALT], [ISTIF_X_UST, ISTIF_Y_UST], [ISTIF_X_SOL, ISTIF_Y_UST]])
+    trapezoid = np.array([
+        [ISTIF_X_SOL, ISTIF_Y_ALT],
+        [ISTIF_X_ALT, ISTIF_Y_ALT],
+        [ISTIF_X_UST, ISTIF_Y_UST],
+        [ISTIF_X_SOL, ISTIF_Y_UST],
+    ])
     ax.add_patch(Polygon(trapezoid, closed=True, linewidth=2, linestyle="--", edgecolor="#2c3e50", facecolor="#ecf0f1", alpha=0.25))
+    
     ax.annotate("", xy=(ISTIF_X_UST, ISTIF_Y_UST+2), xytext=(0, ISTIF_Y_UST+2), arrowprops=dict(arrowstyle="<->", color="#aaa", lw=1))
     ax.text(ISTIF_X_UST/2, ISTIF_Y_UST+3, f"{ISTIF_X_UST:.2f}m", ha="center", fontsize=6.5, color="#333")
     ax.annotate("", xy=(ISTIF_X_ALT, -2), xytext=(0, -2), arrowprops=dict(arrowstyle="<->", color="#aaa", lw=1))
@@ -797,7 +828,14 @@ def saha_ciz_istif(ax, saha, target_df, tarih_ts):
     ax.annotate("", xy=(-2, ISTIF_Y_UST), xytext=(-2, 0), arrowprops=dict(arrowstyle="<->", color="#aaa", lw=1))
     ax.text(-5, ISTIF_Y_UST/2, f"{ISTIF_Y_UST:.2f}m", ha="center", fontsize=6.5, color="#333", rotation=90, va="center")
     ax.text((ISTIF_X_ALT+ISTIF_X_UST)/2+2, ISTIF_Y_UST/2, "45.21m", ha="left", fontsize=6.5, color="#333", rotation=-38)
-    aktif = target_df[(target_df["Istif_X"].notna()) & (target_df["Bitis"] < tarih_ts) & (target_df["Erection_Bas"] > tarih_ts) & (target_df["Mugem_Yerlesti"] == False)].copy()
+    
+    aktif = target_df[
+        (target_df["Istif_X"].notna()) &
+        (target_df["Bitis"] < tarih_ts) &
+        (target_df["Erection_Bas"] > tarih_ts) &
+        (target_df["Mugem_Yerlesti"] == False)
+    ].copy()
+    
     for _, b in aktif.iterrows():
         x, y = float(b["Istif_X"]), float(b["Istif_Y"])
         donuk = bool(b["Donuk"])
@@ -809,6 +847,7 @@ def saha_ciz_istif(ax, saha, target_df, tarih_ts):
         ax.add_patch(Rectangle((x, y), gw, gh, linewidth=0.5, edgecolor="#e67e22", facecolor="#fef9e7", alpha=0.7))
         ax.add_patch(FancyBboxPatch((x+ISKELE, y+ISKELE), bw, bh, boxstyle="round,pad=0.1", linewidth=ew, edgecolor=ec, facecolor="#b9770e", alpha=0.9))
         ax.text(x+ISKELE+bw/2, y+ISKELE+bh/2, str(b["Blok"])[:10], ha="center", va="center", fontsize=5, color="white", fontweight="bold")
+    
     kullanilan_alan = saha_kullanim_alani(saha, target_df, tarih_ts)[1]
     kap = ((ISTIF_X_UST + ISTIF_X_ALT) / 2 * ISTIF_Y_UST)
     pct = min(kullanilan_alan / kap * 100, 100) if kap > 0 else 0
@@ -821,13 +860,19 @@ def saha_ciz_istif(ax, saha, target_df, tarih_ts):
     ax.axis("off")
 
 
+# ==================================================
+# DÜZ KIZAK ÇİZİMİ
+# ==================================================
+
 def saha_ciz_duz_kizak(ax, saha, target_df, tarih_ts):
     toplam_u, toplam_g = DUZ_KIZAK_TOPLAM_U, DUZ_KIZAK_TOPLAM_G
     blok_u, mugem_u = DUZ_KIZAK_BLOK_U, DUZ_KIZAK_MUGEM_U
+    
     ax.add_patch(FancyBboxPatch((0, 0), toplam_u, toplam_g, boxstyle="round,pad=0.3", linewidth=2, linestyle="--", edgecolor="#2c3e50", facecolor="#ecf0f1", alpha=0.25))
     ax.plot([blok_u, blok_u], [0, toplam_g], color="#2c3e50", linewidth=1.5, linestyle="--")
     ax.text(blok_u + mugem_u/2, toplam_g+0.5, "⚓ MUGEM Gemisi", ha="center", va="bottom", fontsize=10, color="#2c3e50", fontweight="bold", style="italic")
     ax.add_patch(Rectangle((blok_u, 0), mugem_u, toplam_g, linewidth=1.0, edgecolor="#7f8c8d", facecolor="#f4f6f6", alpha=0.3))
+    
     tr = TRANSFER_RULES.get("Düz Kızak")
     if tr:
         tw, th = tr["size"]
@@ -835,6 +880,7 @@ def saha_ciz_duz_kizak(ax, saha, target_df, tarih_ts):
             tw, th = th, tw
         ax.add_patch(Rectangle((0, 0), tw, th, linewidth=1.5, edgecolor="#8e44ad", facecolor="none", linestyle="--"))
         ax.text(tw/2, th/2, f"TRANSFER\n{tw:.0f}x{th:.0f}m", ha="center", va="center", fontsize=6, color="#5b2c6f", fontweight="bold")
+    
     aktif = target_df[
         (target_df["Atanan_Saha"] == "Düz Kızak") &
         (target_df["Baslangic"] <= tarih_ts) &
@@ -842,14 +888,22 @@ def saha_ciz_duz_kizak(ax, saha, target_df, tarih_ts):
         (target_df["Koord_X"].notna()) &
         (target_df["Istife_Tasindi"] == False)
     ].copy()
+    
     for _, b in aktif.iterrows():
         _blok_ciz_tek(ax, b, tarih_ts, 0.0)
-    mugem_aktif = target_df[(target_df["Mugem_X"].notna()) & (target_df["Mugem_Y"].notna()) & (target_df["Erection_Bas"] <= tarih_ts)].copy()
+    
+    mugem_aktif = target_df[
+        (target_df["Mugem_X"].notna()) &
+        (target_df["Mugem_Y"].notna()) &
+        (target_df["Erection_Bas"] <= tarih_ts)
+    ].copy()
+    
     for _, b in mugem_aktif.iterrows():
         mx, my = float(b["Mugem_X"]), float(b["Mugem_Y"])
         bw, bh = mugem_boyut(b)
         ax.add_patch(FancyBboxPatch((mx, my), bw, bh, boxstyle="round,pad=0.1", linewidth=1.5, edgecolor="#0c2461", facecolor="#1a5276", alpha=0.92))
         ax.text(mx + bw/2, my + bh/2, str(b["Blok"])[:10], ha="center", va="center", fontsize=6, color="white", fontweight="bold")
+    
     ax.text(0, toplam_g+2.5, "Düz Kızak", fontsize=9, fontweight="bold", color="#1b2631")
     kullanilan_alan = saha_kullanim_alani(saha, target_df, tarih_ts)[1]
     kap = blok_u * toplam_g
@@ -864,11 +918,17 @@ def saha_ciz_duz_kizak(ax, saha, target_df, tarih_ts):
     ax.axis("off")
 
 
+# ==================================================
+# A6 ATÖLYESİ ÇİZİMİ
+# ==================================================
+
 def saha_ciz_a6(ax, saha, target_df, tarih_ts):
     t = pd.Timestamp(tarih_ts).to_pydatetime()
     eyul_sonrasi = t >= A6_EYUL
     blok_u = A6_TAM_U if eyul_sonrasi else A6_BLOK_U
+    
     ax.add_patch(FancyBboxPatch((0, 0), A6_TAM_U, A6_G, boxstyle="round,pad=0.3", linewidth=2, linestyle="--", edgecolor="#2c3e50", facecolor="#ecf0f1", alpha=0.25))
+    
     if not eyul_sonrasi:
         ax.plot([blok_u, blok_u], [0, A6_G], color="#2c3e50", linewidth=1.5, linestyle="--")
         nb76_ic_w, nb76_ic_h = A6_NB76_U * 0.55, A6_G * 0.45
@@ -876,6 +936,7 @@ def saha_ciz_a6(ax, saha, target_df, tarih_ts):
         nb76_ic_y = (A6_G - nb76_ic_h) / 2
         ax.add_patch(Rectangle((nb76_ic_x, nb76_ic_y), nb76_ic_w, nb76_ic_h, linewidth=1.5, edgecolor="#2c3e50", facecolor="none"))
         ax.text(blok_u + A6_NB76_U/2, A6_G/2, "NB76", ha="center", va="center", fontsize=11, color="#2c3e50", fontweight="bold")
+    
     tr = TRANSFER_RULES.get("A6 Atölyesi")
     if tr:
         tw, th = tr["size"]
@@ -883,6 +944,7 @@ def saha_ciz_a6(ax, saha, target_df, tarih_ts):
             tw, th = th, tw
         ax.add_patch(Rectangle((0, 0), tw, th, linewidth=1.5, edgecolor="#8e44ad", facecolor="none", linestyle="--"))
         ax.text(tw/2, th/2, f"TRANSFER\n{tw:.0f}x{th:.0f}m", ha="center", va="center", fontsize=5, color="#5b2c6f", fontweight="bold")
+    
     aktif = target_df[
         (target_df["Atanan_Saha"] == "A6 Atölyesi") &
         (target_df["Baslangic"] <= tarih_ts) &
@@ -890,8 +952,10 @@ def saha_ciz_a6(ax, saha, target_df, tarih_ts):
         (target_df["Koord_X"].notna()) &
         (target_df["Istife_Tasindi"] == False)
     ].copy()
+    
     for _, b in aktif.iterrows():
         _blok_ciz_tek(ax, b, tarih_ts, 0.0)
+    
     kullanilan_alan = saha_kullanim_alani(saha, target_df, tarih_ts)[1]
     kap = blok_u * A6_G
     pct = min(kullanilan_alan / kap * 100, 100) if kap > 0 else 0
@@ -903,7 +967,9 @@ def saha_ciz_a6(ax, saha, target_df, tarih_ts):
     ax.set_ylim(-3.5, A6_G+7)
     ax.set_aspect("equal")
     ax.axis("off")
-
+# ==================================================
+# GENEL SAHA ÇİZİM FONKSİYONU
+# ==================================================
 
 def saha_ciz(ax, saha, target_df, tarih_ts):
     t = pd.Timestamp(tarih_ts).to_pydatetime()
@@ -911,6 +977,7 @@ def saha_ciz(ax, saha, target_df, tarih_ts):
     if u <= 0 or g <= 0:
         ax.axis("off")
         return
+    
     if saha["ad"] == "A3 Atölyesi(Jig)":
         ax.axis("off")
         return
@@ -926,7 +993,9 @@ def saha_ciz(ax, saha, target_df, tarih_ts):
     if saha["ad"] == "A6 Atölyesi":
         saha_ciz_a6(ax, saha, target_df, tarih_ts)
         return
+    
     ax.add_patch(FancyBboxPatch((0, 0), u, g, boxstyle="round,pad=0.3", linewidth=2, linestyle="--", edgecolor="#2c3e50", facecolor="#ecf0f1", alpha=0.25))
+    
     tr = TRANSFER_RULES.get(saha["ad"])
     if tr:
         tw, th = tr["size"]
@@ -934,6 +1003,7 @@ def saha_ciz(ax, saha, target_df, tarih_ts):
             tw, th = th, tw
         ax.add_patch(Rectangle((0, 0), tw, th, linewidth=1.5, edgecolor="#8e44ad", facecolor="none", linestyle="--"))
         ax.text(tw/2, th/2, f"TRANSFER\n{tw:.0f}x{th:.0f}m", ha="center", va="center", fontsize=5, color="#5b2c6f", fontweight="bold")
+    
     aktif = target_df[
         (target_df["Atanan_Saha"] == saha["ad"]) &
         (target_df["Baslangic"] <= tarih_ts) &
@@ -941,8 +1011,10 @@ def saha_ciz(ax, saha, target_df, tarih_ts):
         (target_df["Koord_X"].notna()) &
         (target_df["Istife_Tasindi"] == False)
     ].copy()
+    
     for _, b in aktif.iterrows():
         _blok_ciz_tek(ax, b, tarih_ts, 0.0)
+    
     kullanilan_alan = saha_kullanim_alani(saha, target_df, tarih_ts)[1]
     kap = u * g
     pct = min(kullanilan_alan / kap * 100, 100) if kap > 0 else 0
@@ -955,10 +1027,20 @@ def saha_ciz(ax, saha, target_df, tarih_ts):
     ax.axis("off")
 
 
+# ==================================================
+# PLAN GÖSTER
+# ==================================================
+
 def plan_goster(target_df, tarih_ts):
     import matplotlib.gridspec as gridspec
+    
     t = pd.Timestamp(tarih_ts)
-    aktif_sahalar = [s for s in SAHALAR if s["alan"](t.to_pydatetime())[0] > 0 and s["ad"] != "A3 Atölyesi(Jig)"]
+    aktif_sahalar = [
+        s for s in SAHALAR
+        if s["alan"](t.to_pydatetime())[0] > 0
+        and s["ad"] != "A3 Atölyesi(Jig)"
+    ]
+    
     def saha_boyut(s):
         if s["ad"] == "Açık Saha(İstif)":
             return (ISTIF_X_UST, ISTIF_Y_UST)
@@ -970,11 +1052,16 @@ def plan_goster(target_df, tarih_ts):
             return (74.0 + 52.0, 32.0)
         u, g = s["alan"](t.to_pydatetime())
         return (u, g)
+    
     cols = 3
     rows = max(1, (len(aktif_sahalar) + cols - 1) // cols)
-    row_max_g, col_max_u = [], [0] * cols
+    
+    row_max_g = []
+    col_max_u = [0] * cols
+    
     for i, saha in enumerate(aktif_sahalar):
-        r, c = i // cols, i % cols
+        r = i // cols
+        c = i % cols
         u, g = saha_boyut(saha)
         if len(row_max_g) <= r:
             row_max_g.append(0)
@@ -982,23 +1069,31 @@ def plan_goster(target_df, tarih_ts):
             row_max_g[r] = g
         if u > col_max_u[c]:
             col_max_u[c] = u
+    
     scale = 0.05
     fig_w = max(sum(col_max_u) * scale + cols * 0.5 + 2, 20)
     fig_h = max(sum(row_max_g) * scale + rows * 1.5 + 2, rows * 4)
+    
     fig = plt.figure(figsize=(fig_w, fig_h))
+    
     gs = gridspec.GridSpec(rows, cols, figure=fig, width_ratios=col_max_u, height_ratios=row_max_g, hspace=0.4, wspace=0.15)
+    
     axes = []
     for i, saha in enumerate(aktif_sahalar):
-        r, c = i // cols, i % cols
+        r = i // cols
+        c = i % cols
         axes.append(fig.add_subplot(gs[r, c]))
+    
     aktif_toplam = aktif_blok_say(target_df, t)
     kap = toplam_kapasite(t)
     kullanilan_toplam = sum(saha_kullanim_alani(s, target_df, t)[1] for s in aktif_sahalar)
     pct = min(kullanilan_toplam / kap * 100, 100) if kap > 0 else 0
     color = "#e74c3c" if pct >= DARBOGAZ_PCT else "#1b2631"
+    
     sigmiyan_sayi = len(target_df[target_df["Sigmiyor"] == True])
     otelenen_sayi = len(target_df[target_df["Otelendi"] == True])
     mugem_sayi = len(target_df[(target_df["Mugem_X"].notna()) & (target_df["Mugem_Y"].notna()) & (target_df["Erection_Bas"] <= t)])
+    
     baslik = f"🏗️ BLOK SAHASI YERLEŞİM PLANI — {t.strftime('%d.%m.%Y')}\nToplam Aktif Blok: {aktif_toplam} | Genel Doluluk: %{pct:.1f}"
     if mugem_sayi > 0:
         baslik += f" | ⚓ MUGEM: {mugem_sayi}"
@@ -1006,52 +1101,36 @@ def plan_goster(target_df, tarih_ts):
         baslik += f" | ❌ Sığmayan: {sigmiyan_sayi}"
     if otelenen_sayi > 0:
         baslik += f" | ⏰ Ötelenen: {otelenen_sayi}"
+    
     fig.suptitle(baslik, fontsize=13, fontweight="bold", y=0.98, color=color)
+    
     for i, saha in enumerate(aktif_sahalar):
         saha_ciz(axes[i], saha, target_df, t)
+    
     plt.tight_layout(pad=1.5, rect=[0, 0, 1, 0.96])
     return fig
-
-
 # ==================================================
-# ANA STREAMLIT ARAYÜZ
+# STREAMLIT ARAYÜZ - ANA ÇALIŞTIRMA
 # ==================================================
 
-uploaded_file = st.file_uploader("📂 **Excel dosyasını yükle** (Blok Yerleşim Çalışması.xlsx)", type=["xlsx"])
+uploaded_file = st.file_uploader("📂 **Excel dosyasını yükle (Blok Yerleşim Çalışması.xlsx)**", type=["xlsx"])
 
 if uploaded_file is not None:
     try:
         # Excel'i oku
         df = pd.read_excel(uploaded_file, sheet_name="Blok(MUGEM)")
         
-        # Sütun adlarını düzenle
-        if len(df.columns) >= 13:
-            df.columns = ["Blok", "Baslangic", "Bitis", "Erection_Bas", "En", "Boy", "Alan", "Tonaj",
-                          "Atanacak_Saha", "Kordinat_X", "Kordinat_Y", "Erection_X", "Erection_Y"]
-        elif len(df.columns) >= 11:
-            df.columns = ["Blok", "Baslangic", "Bitis", "Erection_Bas", "En", "Boy", "Alan", "Tonaj",
-                          "Atanacak_Saha", "Kordinat_X", "Kordinat_Y"]
-            df["Erection_X"] = np.nan
-            df["Erection_Y"] = np.nan
-        else:
-            df.columns = ["Blok", "Baslangic", "Bitis", "Erection_Bas", "En", "Boy", "Alan", "Tonaj"]
-            df["Atanacak_Saha"] = np.nan
-            df["Kordinat_X"] = np.nan
-            df["Kordinat_Y"] = np.nan
-            df["Erection_X"] = np.nan
-            df["Erection_Y"] = np.nan
+        # Sütun adlarını düzenle (senin Excel'ine göre)
+        df.columns = [
+            "Blok", "Baslangic", "Bitis", "Erection_Bas",
+            "En", "Boy", "Alan", "Tonaj",
+            "Atanacak_Saha", "Kordinat_X", "Kordinat_Y",
+            "Erection_X", "Erection_Y"
+        ]
         
+        # Tarih sütunlarını dönüştür
         for c in ["Baslangic", "Bitis", "Erection_Bas"]:
             df[c] = pd.to_datetime(df[c], dayfirst=True, errors="coerce")
-        
-        # Temel bilgiler
-        col1, col2, col3, col4 = st.columns(4)
-        col1.metric("📦 Toplam Blok", len(df))
-        col2.metric("🏗️ Toplam Tonaj", f"{df['Tonaj'].sum():.0f} t")
-        col3.metric("📐 Toplam Alan", f"{df['Alan'].sum():.0f} m²")
-        col4.metric("📅 Başlangıç", df["Baslangic"].min().strftime("%d.%m.%Y") if pd.notna(df["Baslangic"].min()) else "-")
-        
-        st.markdown("---")
         
         # Gerekli sütunları ekle
         df["Gercek_En"] = df["En"] + ISKELE * 2
@@ -1107,13 +1186,46 @@ if uploaded_file is not None:
                 except:
                     pass
         
+        # MUGEM koordinatlarını işle
+        for i, row in df.iterrows():
+            ex, ey = row.get("Erection_X"), row.get("Erection_Y")
+            if pd.isna(ex) or pd.isna(ey):
+                continue
+            try:
+                ex_f, ey_f = float(ex), float(ey)
+                bw, bh = mugem_boyut(row)
+                if mugem_icinde_mi(ex_f, ey_f, bw, bh):
+                    df.at[i, "Mugem_X"] = ex_f
+                    df.at[i, "Mugem_Y"] = ey_f
+            except:
+                pass
+        
+        # Sıralama
         df = df.sort_values(["Baslangic", "Tonaj"], ascending=[True, False]).reset_index(drop=True)
+        
+        # Temel bilgiler
+        st.success(f"✅ {len(df)} blok başarıyla yüklendi!")
+        
+        col1, col2, col3, col4 = st.columns(4)
+        col1.metric("📦 Toplam Blok", len(df))
+        col2.metric("🏗️ Toplam Tonaj", f"{df['Tonaj'].sum():.0f} t")
+        col3.metric("📐 Toplam Alan", f"{df['Alan'].sum():.0f} m²")
+        col4.metric("📅 İlk Başlangıç", df["Baslangic"].min().strftime("%d.%m.%Y"))
+        
+        st.markdown("---")
         
         # Tarih seçici
         min_date = df["Baslangic"].min()
         max_date = df["Erection_Bas"].max()
         secilen_tarih = st.date_input("📅 **Plan Görüntülenecek Tarih**", value=pd.Timestamp.now(), min_value=min_date, max_value=max_date)
         
+        # Manuel atama yapılanlar
+        manuel_atama = df[df["Atanacak_Saha"].notna()]
+        if len(manuel_atama) > 0:
+            with st.expander(f"📌 Manuel atama yapılan bloklar ({len(manuel_atama)} adet)"):
+                st.dataframe(manuel_atama[["Blok", "Atanacak_Saha", "Kordinat_X", "Kordinat_Y"]])
+        
+        # Hesaplama butonu
         if st.button("🔄 **Yerleşimi Hesapla ve Göster**", type="primary", use_container_width=True):
             with st.spinner("🏗️ Yerleşim hesaplanıyor. Lütfen bekleyin..."):
                 managers = yerlesim_hesapla(secilen_tarih, df)
@@ -1121,12 +1233,44 @@ if uploaded_file is not None:
             st.success(f"✅ Hesaplama tamamlandı - {secilen_tarih.strftime('%d.%m.%Y')}")
             st.markdown("---")
             
+            # Planı göster
             st.subheader(f"📐 YERLEŞİM PLANI - {secilen_tarih.strftime('%d.%m.%Y')}")
             fig = plan_goster(df, secilen_tarih)
             st.pyplot(fig)
             plt.close(fig)
             
             st.markdown("---")
+            
+            # Raporlar
+            st.subheader("📊 RAPORLAR")
+            col1, col2, col3 = st.columns(3)
+            
+            sigmiyan = df[df["Sigmiyor"] == True]
+            otelenen = df[df["Otelendi"] == True]
+            mugem_bloklar = df[df["Mugem_Yerlesti"] == True]
+            
+            with col1:
+                st.warning(f"❌ **Sığmayan Bloklar:** {len(sigmiyan)} adet")
+                if len(sigmiyan) > 0:
+                    for _, b in sigmiyan.head(10).iterrows():
+                        st.caption(f"• {b['Blok']} ({b['En']}x{b['Boy']}m)")
+            
+            with col2:
+                st.info(f"⏰ **Ötelenen Bloklar:** {len(otelenen)} adet")
+                if len(otelenen) > 0:
+                    for _, b in otelenen.head(10).iterrows():
+                        gecikme = (b["Baslangic"] - b["Orijinal_Bas"]).days
+                        st.caption(f"• {b['Blok']} ({gecikme} gün)")
+            
+            with col3:
+                st.success(f"⚓ **MUGEM'e Yerleşen:** {len(mugem_bloklar)} adet")
+                if len(mugem_bloklar) > 0:
+                    for _, b in mugem_bloklar.head(10).iterrows():
+                        st.caption(f"• {b['Blok']} @ ({b['Mugem_X']}, {b['Mugem_Y']})")
+            
+            st.markdown("---")
+            
+            # Excel indir
             st.subheader("📥 ÇIKTI İNDİR")
             
             output = BytesIO()
@@ -1149,41 +1293,28 @@ if uploaded_file is not None:
                 mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
                 use_container_width=True
             )
-            
-            # Raporlar
-            st.markdown("---")
-            st.subheader("📊 RAPORLAR")
-            col1, col2, col3 = st.columns(3)
-            with col1:
-                st.warning(f"❌ **Sığmayan Bloklar:** {len(df[df['Sigmiyor'] == True])} adet")
-            with col2:
-                st.info(f"⏰ **Ötelenen Bloklar:** {len(df[df['Otelendi'] == True])} adet")
-            with col3:
-                st.success(f"⚓ **MUGEM'e Yerleşen:** {len(df[df['Mugem_Yerlesti'] == True])} adet")
     
     except Exception as e:
         st.error(f"❌ Hata oluştu: {str(e)}")
-        st.info("Excel dosyasının doğru formatta olduğundan emin olun.")
+        st.info("Excel dosyasının doğru formatta olduğundan emin olun. Gerekli sütunlar: Blok, Baslangic, Bitis, Erection_Bas, En, Boy, Alan, Tonaj")
 
 else:
     st.info("👈 **Lütfen Excel dosyasını yükleyin**")
     st.markdown("""
     ### 📋 Excel Dosyası Formatı:
     
-    Dosyada aşağıdaki sütunlar bulunmalıdır:
-    - **Blok** - Blok adı
-    - **Baslangic** - Başlangıç tarihi
-    - **Bitis** - Bitiş tarihi  
-    - **Erection_Bas** - Erection başlangıç tarihi
-    - **En** - En ölçüsü (m)
-    - **Boy** - Boy ölçüsü (m)
-    - **Tonaj** - Ağırlık (t)
-    - **Alan** - Alan (m²)
+    | Sütun | Açıklama |
+    |-------|----------|
+    | Blok | Blok adı |
+    | Başlangıç | Üretim başlangıç tarihi |
+    | Bitiş | Üretim bitiş tarihi |
+    | Erection Başlangıç | Montaj başlangıç tarihi |
+    | En, Boy, Alan, Tonaj | Blok ölçüleri |
     
-    İsteğe bağlı:
-    - **Atanacak_Saha** - Manuel saha ataması
-    - **Kordinat_X/Y** - Manuel koordinat ataması
-    - **Erection_X/Y** - MUGEM koordinatları
+    **İsteğe bağlı sütunlar:**
+    - Atanacağı Saha - Manuel saha ataması
+    - Kordinatlar(x/y) - Manuel koordinat
+    - Erection(x/y) - MUGEM koordinatları
     """)
 
 st.markdown("---")
