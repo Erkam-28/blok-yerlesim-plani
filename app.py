@@ -179,3 +179,77 @@ else:
     """)
 
 st.caption("🏗️ Blok Yerleşim Planı")
+
+# ==================================================
+# SAHA MANAGER SINIFI (EN SONA EKLENDİ)
+# ==================================================
+
+class SahaManager:
+    def __init__(self, ad):
+        self.ad = ad
+        self.bloklar = []
+
+    def aktif_bloklar(self, tarih):
+        t = pd.Timestamp(tarih)
+        return [b for b in self.bloklar if pd.Timestamp(b["bas"]) <= t < pd.Timestamp(b["erc"])]
+
+    def can_place(self, x, y, w, h, saha_u, saha_g, tarih, blok_erc=None):
+        x, y, w, h = snap(x), snap(y), snap(w), snap(h)
+        tarih_ts = pd.Timestamp(tarih)
+        
+        if x < 0 or y < 0:
+            return False
+        if x + w > saha_u + 0.01 or y + h > saha_g + 0.01:
+            return False
+        
+        if blok_erc is not None:
+            blok_erc_ts = pd.Timestamp(blok_erc)
+            kontrol_bloklari = [b for b in self.bloklar if pd.Timestamp(b["bas"]) < blok_erc_ts and pd.Timestamp(b["erc"]) > tarih_ts]
+        else:
+            kontrol_bloklari = [b for b in self.bloklar if pd.Timestamp(b["bas"]) <= tarih_ts < pd.Timestamp(b["erc"])]
+        
+        for b in kontrol_bloklari:
+            if (x < b["x"] + b["w"] and x + w > b["x"] and
+                y < b["y"] + b["h"] and y + h > b["y"]):
+                return False
+        return True
+
+    def find_spot_single(self, w, h, saha_u, saha_g, tarih, blok_erc=None):
+        w, h = snap(w), snap(h)
+        saha_u, saha_g = snap(saha_u), snap(saha_g)
+        
+        if w > saha_u or h > saha_g:
+            return None
+        
+        y = 0.0
+        while y + h <= saha_g + 0.01:
+            x = 0.0
+            while x + w <= saha_u + 0.01:
+                if self.can_place(x, y, w, h, saha_u, saha_g, tarih, blok_erc):
+                    return (x, y)
+                x += STEP
+            y += STEP
+        return None
+
+    def find_spot(self, w, h, saha_u, saha_g, tarih, mod="serbest", blok_erc=None):
+        pos_n = self.find_spot_single(w, h, saha_u, saha_g, tarih, blok_erc)
+        if pos_n:
+            return pos_n[0], pos_n[1], False
+        if abs(w - h) > 0.01:
+            pos_r = self.find_spot_single(h, w, saha_u, saha_g, tarih, blok_erc)
+            if pos_r:
+                return pos_r[0], pos_r[1], True
+        return None
+
+    def add_block(self, idx, x, y, bas, erc, w_placed, h_placed):
+        self.bloklar.append({
+            "idx": idx, "x": snap(x), "y": snap(y),
+            "w": snap(w_placed), "h": snap(h_placed),
+            "bas": bas, "erc": erc,
+        })
+
+    def remove_block(self, idx):
+        self.bloklar = [b for b in self.bloklar if b["idx"] != idx]
+
+
+st.success("✅ SahaManager sınıfı başarıyla eklendi!")
