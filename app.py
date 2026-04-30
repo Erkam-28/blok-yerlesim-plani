@@ -125,19 +125,19 @@ if uploaded_file is not None:
         secilen_tarih = st.date_input("📅 **Plan Görüntülenecek Tarih**", value=pd.Timestamp.now(), min_value=min_date, max_value=max_date)
         
         # Basit aktif blok listesi
-if st.button("🔄 **Yerleşimi Hesapla ve Göster**", type="primary"):
-    tarih_ts = pd.Timestamp(secilen_tarih)
+        if st.button("🔄 **Yerleşimi Hesapla ve Göster**", type="primary"):
+           tarih_ts = pd.Timestamp(secilen_tarih)
     
-    # Yerleşim hesapla
-    sonuc = basit_yeniden_yerlestir(df, secilen_tarih)
+          # Yerleşim hesapla
+           sonuc = basit_yeniden_yerlestir(df, secilen_tarih)
     
-    st.subheader(f"📊 {secilen_tarih.strftime('%d.%m.%Y')} Tarihinde Yerleşim")
+           st.subheader(f"📊 {secilen_tarih.strftime('%d.%m.%Y')} Tarihinde Yerleşim")
     
-    col1, col2, col3, col4 = st.columns(4)
-    col1.metric("🏗️ Toplam Aktif", sonuc["toplam_aktif"])
-    col2.metric("📦 Normal Sahalar", sonuc["normal"])
-    col3.metric("📦 İstif Alanı", sonuc["istif"])
-    col4.metric("⚓ MUGEM", sonuc["mugem"])
+           col1, col2, col3, col4 = st.columns(4)
+           col1.metric("🏗️ Toplam Aktif", sonuc["toplam_aktif"])
+           col2.metric("📦 Normal Sahalar", sonuc["normal"])
+           col3.metric("📦 İstif Alanı", sonuc["istif"])
+           col4.metric("⚓ MUGEM", sonuc["mugem"])
     
     # Aktif blokları göster
     aktif_bloklar = df[(df["Baslangic"] <= tarih_ts) & (df["Erection_Bas"] > tarih_ts)]
