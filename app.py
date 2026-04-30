@@ -226,6 +226,9 @@ class SahaManager:
             return None
         aday_ys = self._aday_ys(tarih)
         aday_xs = self._aday_xs(tarih)
+        
+        en_iyi = None
+        
         for y in aday_ys:
             y = snap(y)
             if y < 0 or y + h > saha_g + 0.01:
@@ -238,40 +241,24 @@ class SahaManager:
                     if x + w > saha_u + 0.01:
                         continue
                 if self.can_place(x, y, w, h, saha_u, saha_g, tarih, blok_erc):
-                    if en_iyi is None:
-                        en_iyi = (x, y)
-                    else:
-                        if (y, x) < (en_iyi[1], en_iyi[0]):
-                            en_iyi = (x, y)
+                    en_iyi = (x, y)
                     break
             if en_iyi is not None:
                 break
+        
         if en_iyi is None:
             y = 0.0
-            while True:
-                y = snap(y)
-                if y + h > saha_g + 0.01:
-                    break
-                tr = self.transfer_rect()
-                x_start = 0.0
-                if tr is not None and y < tr[3]:
-                    x_start = snap(tr[2])
-                x = x_start
-                while True:
-                    x = snap(x)
-                    if self.ad != "Açık Saha(İstif)":
-                        if x + w > saha_u + 0.01:
-                            break
-                    else:
-                        if x > ISTIF_X_UST:
-                            break
+            while y + h <= saha_g + 0.01:
+                x = 0.0
+                while x + w <= saha_u + 0.01:
                     if self.can_place(x, y, w, h, saha_u, saha_g, tarih, blok_erc):
                         en_iyi = (x, y)
                         break
                     x += STEP
-                if en_iyi:
+                if en_iyi is not None:
                     break
                 y += STEP
+        
         return en_iyi
 
     def find_spot(self, w, h, saha_u, saha_g, tarih, mod="serbest", blok_erc=None):
