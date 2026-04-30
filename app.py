@@ -1119,18 +1119,29 @@ if uploaded_file is not None:
     try:
         # Excel'i oku
         df = pd.read_excel(uploaded_file, sheet_name="Blok(MUGEM)")
-        
-        # Sütun adlarını düzenle (senin Excel'ine göre)
-        df.columns = [
-            "Blok", "Baslangic", "Bitis", "Erection_Bas",
-            "En", "Boy", "Alan", "Tonaj",
-            "Atanacak_Saha", "Kordinat_X", "Kordinat_Y",
-            "Erection_X", "Erection_Y"
-        ]
-        
-        # Tarih sütunlarını dönüştür
-        for c in ["Baslangic", "Bitis", "Erection_Bas"]:
-            df[c] = pd.to_datetime(df[c], dayfirst=True, errors="coerce")
+
+# Sütun adlarını düzenle
+df.columns = [
+    "Blok", "Baslangic", "Bitis", "Erection_Bas",
+    "En", "Boy", "Alan", "Tonaj",
+    "Atanacak_Saha", "Kordinat_X", "Kordinat_Y",
+    "Erection_X", "Erection_Y"
+]
+
+# ========== SAYISAL SÜTUNLARI TEMİZLE ==========
+for col in ["En", "Boy", "Alan", "Tonaj"]:
+    if col in df.columns:
+        # Önce metin yap, virgülü noktaya çevir, boşlukları temizle
+        df[col] = df[col].astype(str).str.replace(",", ".").str.strip()
+        # Metin içerenleri (A3 Atölyesi gibi) temizle - sadece sayıları al
+        df[col] = df[col].str.extract(r'(\d+\.?\d*)')[0]
+        # Sayıya çevir, olmayanları 0 yap
+        df[col] = pd.to_numeric(df[col], errors="coerce").fillna(0)
+# ================================================
+
+# Tarih sütunlarını dönüştür
+for c in ["Baslangic", "Bitis", "Erection_Bas"]:
+    df[c] = pd.to_datetime(df[c], dayfirst=True, errors="coerce")
         
         # Gerekli sütunları ekle
         df["Gercek_En"] = df["En"] + ISKELE * 2
