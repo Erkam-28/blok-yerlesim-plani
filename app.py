@@ -22,16 +22,6 @@ def snap(v):
     return round(round(v / STEP) * STEP, 10)
 
 # ==================================================
-# YARDIMCI FONKSİYONLAR
-# ==================================================
-
-def aktif_blok_say(df, tarih):
-    """Verilen tarihte aktif olan blokları sayar"""
-    t = pd.Timestamp(tarih)
-    aktif = df[(df["Baslangic"] <= t) & (df["Erection_Bas"] > t)]
-    return len(aktif)
-
-# ==================================================
 # ANA ARAYÜZ
 # ==================================================
 
@@ -87,7 +77,10 @@ if uploaded_file is not None:
         max_date = df["Erection_Bas"].max()
         secilen_tarih = st.date_input("📅 **Plan Görüntülenecek Tarih**", value=pd.Timestamp.now(), min_value=min_date, max_value=max_date)
         
-        # Hesaplama butonu
+        # ==================================================
+        # YERLEŞİM HESAPLAMA BUTONU
+        # ==================================================
+        
         if st.button("🔄 **Yerleşimi Hesapla**", type="primary", use_container_width=True):
             tarih_ts = pd.Timestamp(secilen_tarih)
             
@@ -110,6 +103,50 @@ if uploaded_file is not None:
                 plt.close(fig)
             else:
                 st.info("Bu tarihte aktif blok bulunmamaktadır.")
+        
+        # ==================================================
+        # GÖRSEL PLAN ÇİZİMİ BUTONU
+        # ==================================================
+        
+        if st.button("🗺️ **Görsel Planı Göster**", use_container_width=True):
+            tarih_ts = pd.Timestamp(secilen_tarih)
+            aktif = df[(df["Baslangic"] <= tarih_ts) & (df["Erection_Bas"] > tarih_ts)]
+            
+            if len(aktif) > 0:
+                fig, ax = plt.subplots(figsize=(12, 6))
+                
+                # Basit bir yerleşim planı çizimi
+                ax.set_xlim(0, 250)
+                ax.set_ylim(0, 60)
+                ax.set_title(f"Saha Yerleşim Planı - {secilen_tarih.strftime('%d.%m.%Y')}")
+                ax.set_xlabel("X (metre)")
+                ax.set_ylabel("Y (metre)")
+                
+                # A3 Atölyesi alanı
+                ax.add_patch(plt.Rectangle((0, 0), 74, 32, fill=True, alpha=0.3, color="blue"))
+                ax.text(37, 16, "A3 Atölyesi", ha="center", va="center", fontsize=10)
+                
+                # Düz Kızak alanı
+                ax.add_patch(plt.Rectangle((0, 35), 101, 20, fill=True, alpha=0.3, color="green"))
+                ax.text(50, 45, "Düz Kızak", ha="center", va="center", fontsize=10)
+                
+                # İstif alanı
+                ax.add_patch(plt.Rectangle((120, 35), 100, 20, fill=True, alpha=0.3, color="orange"))
+                ax.text(170, 45, "İstif Alanı", ha="center", va="center", fontsize=10)
+                
+                # Blokları nokta olarak göster
+                import random
+                random.seed(42)
+                for i, row in aktif.head(30).iterrows():
+                    x = random.uniform(5, 70)
+                    y = random.uniform(5, 30)
+                    ax.scatter(x, y, s=row["Tonaj"]*2, c="red", alpha=0.7)
+                    ax.annotate(row["Blok"], (x, y), fontsize=6)
+                
+                st.pyplot(fig)
+                plt.close(fig)
+            else:
+                st.info("Bu tarihte aktif blok yok, plan gösterilemiyor.")
         
         # Veri önizleme
         with st.expander("📋 Tüm Bloklar (ilk 20 satır)"):
@@ -144,48 +181,3 @@ else:
 
 st.markdown("---")
 st.caption("🏗️ Blok Yerleşim Planı")
-    # ==================================================
-    # GÖRSEL PLAN ÇİZİMİ
-    # ==================================================
-    
-    if st.button("🗺️ **Görsel Planı Göster**", use_container_width=True):
-        tarih_ts = pd.Timestamp(secilen_tarih)
-        aktif = df[(df["Baslangic"] <= tarih_ts) & (df["Erection_Bas"] > tarih_ts)]
-        
-        if len(aktif) > 0:
-            fig, ax = plt.subplots(figsize=(12, 6))
-            
-            # Basit bir yerleşim planı çizimi (sablon)
-            ax.set_xlim(0, 250)
-            ax.set_ylim(0, 60)
-            ax.set_title(f"Saha Yerleşim Planı - {secilen_tarih.strftime('%d.%m.%Y')}")
-            ax.set_xlabel("X (metre)")
-            ax.set_ylabel("Y (metre)")
-            
-            # A3 Atölyesi alanı
-            ax.add_patch(plt.Rectangle((0, 0), 74, 32, fill=True, alpha=0.3, color="blue"))
-            ax.text(37, 16, "A3 Atölyesi", ha="center", va="center", fontsize=10)
-            
-            # Düz Kızak alanı
-            ax.add_patch(plt.Rectangle((0, 35), 101, 20, fill=True, alpha=0.3, color="green"))
-            ax.text(50, 45, "Düz Kızak", ha="center", va="center", fontsize=10)
-            
-            # İstif alanı
-            ax.add_patch(plt.Rectangle((120, 35), 100, 20, fill=True, alpha=0.3, color="orange"))
-            ax.text(170, 45, "İstif Alanı", ha="center", va="center", fontsize=10)
-            
-            # Blokları nokta olarak göster
-            x_list = []
-            y_list = []
-            for i, row in aktif.head(30).iterrows():
-                x = np.random.uniform(5, 70)
-                y = np.random.uniform(5, 30)
-                x_list.append(x)
-                y_list.append(y)
-                ax.scatter(x, y, s=row["Tonaj"]*2, c="red", alpha=0.7)
-                ax.annotate(row["Blok"], (x, y), fontsize=6)
-            
-            st.pyplot(fig)
-            plt.close(fig)
-        else:
-            st.info("Bu tarihte aktif blok yok, plan gösterilemiyor.")
