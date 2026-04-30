@@ -1,28 +1,22 @@
 import streamlit as st
 import pandas as pd
-import numpy as np
+from datetime import datetime
 
-st.title("HATA AYIKLAMA")
+st.title("SAHA TANIMI TESTİ")
 
-uploaded = st.file_uploader("Excel yükle", type=["xlsx"])
+# SAHALAR tanımını buraya kopyala (kısa versiyon)
+SAHALAR = [
+    {"ad": "A3 Atölyesi", "oncelik": 1,
+     "kisit": lambda b, t: True,  # Geçici
+     "alan": lambda t: (74.0, 32.0)},
+    {"ad": "A29 Açık Saha", "oncelik": 2,
+     "kisit": lambda b, t: True,
+     "alan": lambda t: (120.0, 21.0)},
+]
 
-if uploaded:
-    df = pd.read_excel(uploaded, sheet_name="Blok(MUGEM)")
-    
-    # Tüm sütunları ve ilk satırdaki değerleri göster
-    st.write("### SÜTUNLAR VE İLK SATIR:")
-    for col in df.columns:
-        val = df[col].iloc[0]
-        st.write(f"**{col}**: {val} (tip: {type(val).__name__})")
-    
-    # Sayısal olması gereken sütunları kontrol et
-    st.write("### SAYISAL SÜTUN KONTROLÜ:")
-    for col in ["En", "Boy", "Alan", "Tonaj"]:
-        if col in df.columns:
-            degerler = df[col].head(10).tolist()
-            st.write(f"{col}: {degerler}")
-            
-            # Metin var mı?
-            for i, val in enumerate(degerler):
-                if isinstance(val, str):
-                    st.error(f"❌ {col} sütununda {i}. satırda METİN: '{val}'")
+for saha in SAHALAR:
+    try:
+        u, g = saha["alan"](datetime.now())
+        st.success(f"✅ {saha['ad']}: {u} x {g}")
+    except Exception as e:
+        st.error(f"❌ {saha['ad']} HATALI: {e}")
