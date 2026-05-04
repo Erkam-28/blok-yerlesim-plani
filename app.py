@@ -973,6 +973,11 @@ if uploaded_file is not None:
         df["Kordinat_Y"] = np.nan
         df["Erection_X"] = np.nan
         df["Erection_Y"] = np.nan
+    # Atanan_Saha sütununu string tipine çevir (metin saklamak için)
+    if "Atanacak_Saha" in df.columns:
+        df["Atanacak_Saha"] = df["Atanacak_Saha"].astype(str)
+    else:
+        df["Atanacak_Saha"] = np.nan    
     
     # Sayısal sütunları temizle
     for col in ["En", "Boy", "Alan", "Tonaj"]:
