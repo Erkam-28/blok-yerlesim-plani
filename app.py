@@ -974,10 +974,10 @@ if uploaded_file is not None:
         df["Erection_X"] = np.nan
         df["Erection_Y"] = np.nan
     # Atanan_Saha sütununu string tipine çevir (metin saklamak için)
-    if "Atanacak_Saha" in df.columns:
-        df["Atanacak_Saha"] = df["Atanacak_Saha"].astype(str)
-    else:
-        df["Atanacak_Saha"] = np.nan    
+     metin_sutunlar = ["Blok", "Atanacak_Saha", "Kordinat_X", "Kordinat_Y", "Erection_X", "Erection_Y"]
+     for col in metin_sutunlar:
+         if col in df.columns:
+             df[col] = df[col].astype(str)     
     
     # Sayısal sütunları temizle
     for col in ["En", "Boy", "Alan", "Tonaj"]:
