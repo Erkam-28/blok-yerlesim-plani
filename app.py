@@ -117,7 +117,7 @@ def mugem_boyut(row):
     return float(row["Boy"]), float(row["En"])
 
 # ==================================================
-# SAHA MANAGER
+# SAHA MANAGER SINIFI
 # ==================================================
 
 class SahaManager:
@@ -332,6 +332,9 @@ class MugemManager:
     def remove_block(self, idx):
         self.bloklar = [b for b in self.bloklar if b["idx"] != idx]
 
+# ==================================================
+# YERLEŞTİRME FONKSİYONLARI
+# ==================================================
 
 def reset_df(target_df):
     target_df["Koord_X"] = np.nan
@@ -348,7 +351,9 @@ def reset_df(target_df):
     if "Orijinal_Bas" in target_df.columns:
         target_df["Baslangic"] = target_df["Orijinal_Bas"].copy()
         target_df["Bitis"] = target_df["Orijinal_Bitis"].copy()
-    return {s["ad"]: SahaManager(s["ad"]) for s in SAHALAR}
+    managers = {s["ad"]: SahaManager(s["ad"]) for s in SAHALAR}
+    managers["_MUGEM_"] = MugemManager()
+    return managers
 
 
 def normal_sahaya_yerleştir(idx, tarih_ts, target_df, managers):
@@ -948,190 +953,171 @@ def plan_goster(target_df, tarih_ts):
 
 
 # ==================================================
-# STREAMLIT ARAYÜZ
+# ANA STREAMLIT ARAYÜZ
 # ==================================================
 
 uploaded_file = st.file_uploader("📂 **Excel dosyasını yükle**", type=["xlsx"])
 
 if uploaded_file is not None:
-    # Excel'i oku
-    df = pd.read_excel(uploaded_file, sheet_name="Blok(MUGEM)")
-    
-    # Sütun adlarını düzenle
-    if len(df.columns) >= 13:
-        df.columns = ["Blok", "Baslangic", "Bitis", "Erection_Bas", "En", "Boy", "Alan", "Tonaj",
-                      "Atanacak_Saha", "Kordinat_X", "Kordinat_Y", "Erection_X", "Erection_Y"]
-    elif len(df.columns) >= 11:
-        df.columns = ["Blok", "Baslangic", "Bitis", "Erection_Bas", "En", "Boy", "Alan", "Tonaj",
-                      "Atanacak_Saha", "Kordinat_X", "Kordinat_Y"]
-        df["Erection_X"] = np.nan
-        df["Erection_Y"] = np.nan
-    else:
-        df.columns = ["Blok", "Baslangic", "Bitis", "Erection_Bas", "En", "Boy", "Alan", "Tonaj"]
-        df["Atanacak_Saha"] = np.nan
-        df["Kordinat_X"] = np.nan
-        df["Kordinat_Y"] = np.nan
-        df["Erection_X"] = np.nan
-        df["Erection_Y"] = np.nan
-    # Atanan_Saha sütununu string tipine çevir (metin saklamak için)
-     metin_sutunlar = ["Blok", "Atanacak_Saha", "Kordinat_X", "Kordinat_Y", "Erection_X", "Erection_Y"]
-     for col in metin_sutunlar:
-         if col in df.columns:
-             df[col] = df[col].astype(str)     
-    
-    # Sayısal sütunları temizle
-    for col in ["En", "Boy", "Alan", "Tonaj"]:
-        df[col] = pd.to_numeric(df[col], errors="coerce").fillna(0)
-    
-    # Tarih sütunlarını dönüştür
-    for c in ["Baslangic", "Bitis", "Erection_Bas"]:
-        df[c] = pd.to_datetime(df[c], dayfirst=True, errors="coerce")
-    
-    # Geçersiz satırları temizle
-    df = df.dropna(subset=["Baslangic", "Bitis", "Erection_Bas"])
-    
-    # Gerekli sütunları ekle
-    df["Gercek_En"] = df["En"] + ISKELE * 2
-    df["Gercek_Boy"] = df["Boy"] + ISKELE * 2
-    df["Gercek_Alan"] = df["Gercek_En"] * df["Gercek_Boy"]
-    df["Atanan_Saha"] = np.nan
-    df["Koord_X"] = np.nan
-    df["Koord_Y"] = np.nan
-    df["Normal_X"] = np.nan
-    df["Normal_Y"] = np.nan
-    df["Istif_X"] = np.nan
-    df["Istif_Y"] = np.nan
-    df["Mugem_X"] = np.nan
-    df["Mugem_Y"] = np.nan
-    df["Mugem_Yerlesti"] = False
-    df["Istife_Tasindi"] = False
-    df["Donuk"] = False
-    df["Sigmiyor"] = False
-    df["Otelendi"] = False
-    df["Orijinal_Bas"] = df["Baslangic"].copy()
-    df["Orijinal_Bitis"] = df["Bitis"].copy()
-    
-    # Manuel atamaları işle
-    for i, row in df.iterrows():
-        saha_adi = row.get("Atanacak_Saha")
-        kx, ky = row.get("Kordinat_X"), row.get("Kordinat_Y")
-        if pd.isna(saha_adi):
-            continue
-        if not isinstance(saha_adi, str):
-            continue
-        saha_adi = saha_adi.strip()
-        saha_obj = next((s for s in SAHALAR if s["ad"] == saha_adi), None)
-        if saha_obj is None:
-            continue
-        t_timestamp = pd.Timestamp(row["Baslangic"]).to_pydatetime() if pd.notna(row["Baslangic"]) else datetime.now()
-        if not saha_obj["kisit"](row, t_timestamp):
-            continue
-        df.at[i, "Atanan_Saha"] = saha_adi
-        if pd.notna(kx) and pd.notna(ky):
+    try:
+        df = pd.read_excel(uploaded_file, sheet_name="Blok(MUGEM)")
+        
+        # Sütun adlarını düzenle
+        if len(df.columns) >= 13:
+            df.columns = ["Blok", "Baslangic", "Bitis", "Erection_Bas", "En", "Boy", "Alan", "Tonaj",
+                          "Atanacak_Saha", "Kordinat_X", "Kordinat_Y", "Erection_X", "Erection_Y"]
+        elif len(df.columns) >= 11:
+            df.columns = ["Blok", "Baslangic", "Bitis", "Erection_Bas", "En", "Boy", "Alan", "Tonaj",
+                          "Atanacak_Saha", "Kordinat_X", "Kordinat_Y"]
+            df["Erection_X"] = np.nan
+            df["Erection_Y"] = np.nan
+        else:
+            df.columns = ["Blok", "Baslangic", "Bitis", "Erection_Bas", "En", "Boy", "Alan", "Tonaj"]
+            df["Atanacak_Saha"] = np.nan
+            df["Kordinat_X"] = np.nan
+            df["Kordinat_Y"] = np.nan
+            df["Erection_X"] = np.nan
+            df["Erection_Y"] = np.nan
+        
+        # Metin sütunlarını string yap
+        for col in ["Atanacak_Saha"]:
+            if col in df.columns:
+                df[col] = df[col].astype(str)
+        
+        # Sayısal sütunları temizle
+        for col in ["En", "Boy", "Alan", "Tonaj"]:
+            if col in df.columns:
+                df[col] = pd.to_numeric(df[col], errors="coerce").fillna(0)
+        
+        # Tarih sütunlarını dönüştür
+        for c in ["Baslangic", "Bitis", "Erection_Bas"]:
+            df[c] = pd.to_datetime(df[c], dayfirst=True, errors="coerce")
+        
+        df = df.dropna(subset=["Baslangic", "Bitis", "Erection_Bas"])
+        
+        # Gerekli sütunları ekle
+        df["Gercek_En"] = df["En"] + ISKELE * 2
+        df["Gercek_Boy"] = df["Boy"] + ISKELE * 2
+        df["Gercek_Alan"] = df["Gercek_En"] * df["Gercek_Boy"]
+        df["Atanan_Saha"] = np.nan
+        df["Koord_X"] = np.nan
+        df["Koord_Y"] = np.nan
+        df["Normal_X"] = np.nan
+        df["Normal_Y"] = np.nan
+        df["Istif_X"] = np.nan
+        df["Istif_Y"] = np.nan
+        df["Mugem_X"] = np.nan
+        df["Mugem_Y"] = np.nan
+        df["Mugem_Yerlesti"] = False
+        df["Istife_Tasindi"] = False
+        df["Donuk"] = False
+        df["Sigmiyor"] = False
+        df["Otelendi"] = False
+        df["Orijinal_Bas"] = df["Baslangic"].copy()
+        df["Orijinal_Bitis"] = df["Bitis"].copy()
+        
+        # Manuel atamaları işle
+        for i, row in df.iterrows():
+            saha_adi = row.get("Atanacak_Saha")
+            kx, ky = row.get("Kordinat_X"), row.get("Kordinat_Y")
+            if pd.isna(saha_adi) or saha_adi == "nan":
+                continue
+            saha_obj = next((s for s in SAHALAR if s["ad"] == saha_adi), None)
+            if saha_obj is None:
+                continue
+            t = pd.Timestamp(row["Baslangic"]).to_pydatetime() if pd.notna(row["Baslangic"]) else datetime.now()
+            if not saha_obj["kisit"](row, t):
+                continue
+            df.at[i, "Atanan_Saha"] = saha_adi
+            if pd.notna(kx) and pd.notna(ky) and kx != "nan" and ky != "nan":
+                try:
+                    x, y = float(kx), float(ky)
+                    u, g = saha_obj["alan"](t)
+                    gw, gh = row["En"] + ISKELE*2, row["Boy"] + ISKELE*2
+                    if x >= 0 and y >= 0:
+                        if saha_adi == "Düz Kızak":
+                            if x + gw <= DUZ_KIZAK_BLOK_U and y + gh <= g:
+                                df.at[i, "Koord_X"] = x
+                                df.at[i, "Koord_Y"] = y
+                        else:
+                            if x + gw <= u and y + gh <= g:
+                                df.at[i, "Koord_X"] = x
+                                df.at[i, "Koord_Y"] = y
+                except:
+                    pass
+        
+        # MUGEM koordinatlarını işle
+        for i, row in df.iterrows():
+            ex, ey = row.get("Erection_X"), row.get("Erection_Y")
+            if pd.isna(ex) or pd.isna(ey) or ex == "nan" or ey == "nan":
+                continue
             try:
-                x, y = float(kx), float(ky)
-                u, g = saha_obj["alan"](t_timestamp)
-                gw, gh = row["En"] + ISKELE*2, row["Boy"] + ISKELE*2
-                if x >= 0 and y >= 0:
-                    if saha_adi == "Düz Kızak":
-                        if x + gw <= DUZ_KIZAK_BLOK_U and y + gh <= g:
-                            df.at[i, "Koord_X"] = x
-                            df.at[i, "Koord_Y"] = y
-                    else:
-                        if x + gw <= u and y + gh <= g:
-                            df.at[i, "Koord_X"] = x
-                            df.at[i, "Koord_Y"] = y
+                ex_f, ey_f = float(ex), float(ey)
+                bw, bh = mugem_boyut(row)
+                if mugem_icinde_mi(ex_f, ey_f, bw, bh):
+                    df.at[i, "Mugem_X"] = ex_f
+                    df.at[i, "Mugem_Y"] = ey_f
             except:
                 pass
-    
-    # MUGEM koordinatlarını işle
-    for i, row in df.iterrows():
-        ex, ey = row.get("Erection_X"), row.get("Erection_Y")
-        if pd.isna(ex) or pd.isna(ey):
-            continue
-        try:
-            ex_f, ey_f = float(ex), float(ey)
-            bw, bh = mugem_boyut(row)
-            if mugem_icinde_mi(ex_f, ey_f, bw, bh):
-                df.at[i, "Mugem_X"] = ex_f
-                df.at[i, "Mugem_Y"] = ey_f
-        except:
-            pass
-    
-    # Sıralama
-    df = df.sort_values(["Baslangic", "Tonaj"], ascending=[True, False]).reset_index(drop=True)
-    
-    st.success(f"✅ {len(df)} blok başarıyla yüklendi!")
-    
-    # Özet bilgiler
-    col1, col2, col3 = st.columns(3)
-    col1.metric("📦 Toplam Blok", len(df))
-    col2.metric("🏗️ Toplam Tonaj", f"{df['Tonaj'].sum():.0f} t")
-    col3.metric("📅 İlk Başlangıç", df["Baslangic"].min().strftime("%d.%m.%Y"))
-    
-    st.markdown("---")
-    
-    # Tarih seçici
-    min_date = df["Baslangic"].min()
-    max_date = df["Erection_Bas"].max()
-    secilen_tarih = st.date_input("📅 **Plan Görüntülenecek Tarih**", value=pd.Timestamp.now(), min_value=min_date, max_value=max_date)
-    
-    # Hesaplama butonu
-    if st.button("🔄 **Yerleşimi Hesapla ve Göster**", type="primary", use_container_width=True):
-        with st.spinner("🏗️ Yerleşim hesaplanıyor. Lütfen bekleyin..."):
-            managers = yerlesim_hesapla(secilen_tarih, df)
         
-        st.success(f"✅ Hesaplama tamamlandı - {secilen_tarih.strftime('%d.%m.%Y')}")
-        st.markdown("---")
+        df = df.sort_values(["Baslangic", "Tonaj"], ascending=[True, False]).reset_index(drop=True)
         
-        # Planı göster
-        st.subheader(f"📐 YERLEŞİM PLANI - {secilen_tarih.strftime('%d.%m.%Y')}")
-        fig = plan_goster(df, secilen_tarih)
-        st.pyplot(fig)
-        plt.close(fig)
+        st.success(f"✅ {len(df)} blok başarıyla yüklendi!")
         
-        st.markdown("---")
-        
-        # Raporlar
-        st.subheader("📊 RAPORLAR")
         col1, col2, col3 = st.columns(3)
-        
-        sigmiyan = df[df["Sigmiyor"] == True]
-        otelenen = df[df["Otelendi"] == True]
-        mugem_bloklar = df[df["Mugem_Yerlesti"] == True]
-        
-        with col1:
-            st.warning(f"❌ **Sığmayan Bloklar:** {len(sigmiyan)} adet")
-        with col2:
-            st.info(f"⏰ **Ötelenen Bloklar:** {len(otelenen)} adet")
-        with col3:
-            st.success(f"⚓ **MUGEM'e Yerleşen:** {len(mugem_bloklar)} adet")
+        col1.metric("📦 Toplam Blok", len(df))
+        col2.metric("🏗️ Toplam Tonaj", f"{df['Tonaj'].sum():.0f} t")
+        col3.metric("📅 İlk Başlangıç", df["Baslangic"].min().strftime("%d.%m.%Y"))
         
         st.markdown("---")
         
-        # Excel indir
-        st.subheader("📥 ÇIKTI İNDİR")
+        min_date = df["Baslangic"].min()
+        max_date = df["Erection_Bas"].max()
+        secilen_tarih = st.date_input("📅 **Plan Görüntülenecek Tarih**", value=pd.Timestamp.now(), min_value=min_date, max_value=max_date)
         
-        output = BytesIO()
-        with pd.ExcelWriter(output, engine='openpyxl') as writer:
-            cikti = df.copy()
-            for col in ["Baslangic", "Bitis", "Erection_Bas", "Orijinal_Bas", "Orijinal_Bitis"]:
-                if col in cikti.columns:
-                    cikti[col] = pd.to_datetime(cikti[col]).dt.strftime("%d.%m.%Y")
-            cols_to_keep = ["Blok", "Baslangic", "Bitis", "Erection_Bas", "Atanan_Saha",
-                            "Koord_X", "Koord_Y", "Mugem_X", "Mugem_Y", "Mugem_Yerlesti",
-                            "Istife_Tasindi", "Donuk", "Sigmiyor", "Otelendi",
-                            "Orijinal_Bas", "Orijinal_Bitis"]
-            cols_to_keep = [c for c in cols_to_keep if c in cikti.columns]
-            cikti[cols_to_keep].to_excel(writer, index=False, sheet_name="Yerlesim")
-        
-        st.download_button(
-            label="📥 **Excel Çıktısını İndir**",
-            data=output.getvalue(),
-            file_name=f"blok_yerlesim_{secilen_tarih.strftime('%Y%m%d')}.xlsx",
-            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-            use_container_width=True
-        )
+        if st.button("🔄 **Yerleşimi Hesapla ve Göster**", type="primary", use_container_width=True):
+            with st.spinner("🏗️ Yerleşim hesaplanıyor..."):
+                managers = yerlesim_hesapla(secilen_tarih, df)
+            
+            st.success(f"✅ Hesaplama tamamlandı - {secilen_tarih.strftime('%d.%m.%Y')}")
+            
+            fig = plan_goster(df, secilen_tarih)
+            st.pyplot(fig)
+            plt.close(fig)
+            
+            st.markdown("---")
+            
+            # Raporlar
+            st.subheader("📊 RAPORLAR")
+            col1, col2, col3 = st.columns(3)
+            col1.warning(f"❌ Sığmayan: {len(df[df['Sigmiyor'] == True])}")
+            col2.info(f"⏰ Ötelenen: {len(df[df['Otelendi'] == True])}")
+            col3.success(f"⚓ MUGEM: {len(df[df['Mugem_Yerlesti'] == True])}")
+            
+            # Excel indir
+            output = BytesIO()
+            with pd.ExcelWriter(output, engine='openpyxl') as writer:
+                cikti = df.copy()
+                for col in ["Baslangic", "Bitis", "Erection_Bas", "Orijinal_Bas", "Orijinal_Bitis"]:
+                    if col in cikti.columns:
+                        cikti[col] = pd.to_datetime(cikti[col]).dt.strftime("%d.%m.%Y")
+                cols_to_keep = ["Blok", "Baslangic", "Bitis", "Erection_Bas", "Atanan_Saha",
+                                "Koord_X", "Koord_Y", "Mugem_X", "Mugem_Y", "Mugem_Yerlesti",
+                                "Istife_Tasindi", "Donuk", "Sigmiyor", "Otelendi",
+                                "Orijinal_Bas", "Orijinal_Bitis"]
+                cols_to_keep = [c for c in cols_to_keep if c in cikti.columns]
+                cikti[cols_to_keep].to_excel(writer, index=False, sheet_name="Yerlesim")
+            
+            st.download_button(
+                label="📥 **Excel Çıktısını İndir**",
+                data=output.getvalue(),
+                file_name=f"blok_yerlesim_{secilen_tarih.strftime('%Y%m%d')}.xlsx",
+                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                use_container_width=True
+            )
+    
+    except Exception as e:
+        st.error(f"❌ Hata oluştu: {str(e)}")
 
 else:
     st.info("👈 **Lütfen Excel dosyasını yükleyin**")
